@@ -2,6 +2,9 @@
 nacho assignment 2
 
 20-April-18
+
 Set up Rep and start working on hint-1
 
 Experiment using data frames
+
+Scrap dataframes - instead just read json file as textFiles then pull out data.

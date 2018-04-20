@@ -19,11 +19,14 @@ def my_main(dataset_dir, result_dir, percentage_f):
 
 	inputRDD = sc.textFile(dataset_dir)
   
-    df = sqlContext.read.json(dataset_dir)
-    df.sort_values(by='cuisine')
+    #df = sqlContext.read.json(dataset_dir)
+    #df.sort_values(by='cuisine')
 	
+	dictionaryRDD = inputRDD.map(lambda x: json.loads(x))
+	#dataFrame.show() 
 	
-	dataFrame.show() 
+	for item in dictionaryRDD.take(5):
+		print(item)
   
     pass
 
