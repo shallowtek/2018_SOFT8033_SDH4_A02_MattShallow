@@ -16,6 +16,15 @@ import json
 # FUNCTION my_main
 # ------------------------------------------
 def my_main(dataset_dir, result_dir, percentage_f):
+
+	inputRDD = sc.textFile(dataset_dir)
+  
+    df = sqlContext.read.json(dataset_dir)
+    df.sort_values(by='cuisine')
+	
+	
+	dataFrame.show() 
+  
     pass
 
 # ---------------------------------------------------------------
