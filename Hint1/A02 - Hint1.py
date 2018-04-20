@@ -11,7 +11,20 @@
 # --------------------------------------------------------
 
 import json
-
+# ------------------------------------------
+# FUNCTION split
+# ------------------------------------------
+#split function checks the dictionary that is passed in for key words and returns a tuple
+def split(x):
+	
+	cuisine = x["cuisine"]
+  
+	evaluation = x["evaluation"]
+  
+	points = x["points"]
+   
+  
+	return (cuisine,(points,evaluation))
 # ------------------------------------------
 # FUNCTION my_main
 # ------------------------------------------
@@ -22,10 +35,14 @@ def my_main(dataset_dir, result_dir, percentage_f):
     #df = sqlContext.read.json(dataset_dir)
     #df.sort_values(by='cuisine')
 	
+	#json.loads() decodes the json to a dictionary
 	dictionaryRDD = inputRDD.map(lambda x: json.loads(x))
 	#dataFrame.show() 
 	
-	for item in dictionaryRDD.take(5):
+	#split the dictionary into cuisine, points and evaluation and then group by cuisine
+	splitLineRDD = dictionaryRDD.map(lambda x: split(x)).groupBy(lambda y: y[0])
+	
+	for item in splitLineRDD.take(5):
 		print(item)
   
     pass
