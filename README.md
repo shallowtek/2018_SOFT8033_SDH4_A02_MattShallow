@@ -12,3 +12,7 @@ Scrap dataframes - instead just read json file as textFiles then pull out data.
 Use read.json to convert each line of json to dictionary.
 
 Use split function to separate the key words and group by cuisine.
+
+21-April-18
+
+Try get reduce working and combine tuples(broken)

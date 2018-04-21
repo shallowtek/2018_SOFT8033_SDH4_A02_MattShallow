@@ -11,47 +11,74 @@
 # --------------------------------------------------------
 
 import json
+ 
+
+
 # ------------------------------------------
-# FUNCTION split
+# FUNCTION my_parse
 # ------------------------------------------
-#split function checks the dictionary that is passed in for key words and returns a tuple
-def split(x):
-	
-	cuisine = x["cuisine"]
+def my_split(x):
   
-	evaluation = x["evaluation"]
+  cuisine = x["cuisine"]
   
-	points = x["points"]
-   
+  evaluation = x["evaluation"]
   
-	return (cuisine,(points,evaluation))
+  points = x["points"]
+  
+  return (cuisine,(points,evaluation))
+
+# ------------------------------------------
+# FUNCTION my_reduce
+# ------------------------------------------
+def my_reduce(x):
+  
+  points = 0
+  numReviews = 0
+  numNegReviews = 0
+  numReviews = numReviews + 1
+  
+  if x[1] == "Negative":
+    numNegReviews = numReviews + 1
+    points -= x[0]
+  else:
+    points = points + x[0]
+    
+  
+  return (numReviews,numNegReviews, points)
+
 # ------------------------------------------
 # FUNCTION my_main
 # ------------------------------------------
 def my_main(dataset_dir, result_dir, percentage_f):
+  
+  #Read each line
+  inputRDD = sc.textFile(dataset_dir) 
 
-	inputRDD = sc.textFile(dataset_dir)
+  #2. Convert line to string and map to dictionary
+  dictionaryRDD = inputRDD.map(lambda x: json.loads(x))
   
-    #df = sqlContext.read.json(dataset_dir)
-    #df.sort_values(by='cuisine')
-	
-	#json.loads() decodes the json to a dictionary
-	dictionaryRDD = inputRDD.map(lambda x: json.loads(x))
-	#dataFrame.show() 
-	
-	#split the dictionary into cuisine, points and evaluation and then group by cuisine
-	splitLineRDD = dictionaryRDD.map(lambda x: split(x)).groupBy(lambda y: y[0])
-	
-	for item in splitLineRDD.take(5):
-		print(item)
+  #Split into key words
+  splitRDD = dictionaryRDD.map(lambda x: my_split(x))
+  # before (cuisine,(points, evaluation))
+  #tuple(map(sum,zip(a,b)))
+  filterRDD = splitRDD.reduceByKey(lambda x, y: tuple(map(sum, zip(my_reduce(x),my_reduce(y))))).sortBy(lambda x: x[1][0], False)
+ 
+  #9. Save results to text files
+  #sortedRDD.saveAsTextFile(result_dir)
   
-    pass
+  #res = filterRDD
+  
+  for item in filterRDD.take(20):
+    print(item)
+ 
+
+  pass
 
 # ---------------------------------------------------------------
 #           PYTHON EXECUTION
 # This is the main entry point to the execution of our program.
 # It provides a call to the 'main function' defined in our
-# Python program, making the Python interpreter to trigger
+# Python program, makin th Pytho interprete to trigge
 # its execution.
 # ---------------------------------------------------------------
 if __name__ == '__main__':
@@ -65,5 +92,6 @@ if __name__ == '__main__':
     # 3. We remove the monitoring and output directories
     dbutils.fs.rm(result_dir, True)
 
-    # 4. We call to our main function
+    # 5. We call to our main function
     my_main(source_dir, result_dir, percentage_f)
+
