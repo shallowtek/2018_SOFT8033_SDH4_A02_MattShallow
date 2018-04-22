@@ -16,3 +16,7 @@ Use split function to separate the key words and group by cuisine.
 21-April-18
 
 Try get reduce working and combine tuples(broken)
+
+22-April-18
+
+Finally got the bloody thing to reduce by key argh!!!

@@ -11,7 +11,6 @@
 # --------------------------------------------------------
 
 import json
- 
 
 
 # ------------------------------------------
@@ -25,27 +24,41 @@ def my_split(x):
   
   points = x["points"]
   
-  return (cuisine,(points,evaluation))
+  return (cuisine, (points, evaluation))
 
 # ------------------------------------------
 # FUNCTION my_reduce
 # ------------------------------------------
 def my_reduce(x):
-  
+
+  my_tuple = x[1]
+  cuisine = x[0]
   points = 0
-  numReviews = 0
+  numReviews = 1
   numNegReviews = 0
-  numReviews = numReviews + 1
   
-  if x[1] == "Negative":
-    numNegReviews = numReviews + 1
-    points -= x[0]
+  
+  if my_tuple[1] == "Negative":
+    numNegReviews = 1
+    points -= my_tuple[0]
   else:
-    points = points + x[0]
+    points = points + my_tuple[0]
     
   
-  return (numReviews,numNegReviews, points)
-
+  
+  return (cuisine,(numReviews, numNegReviews, points))
+# ------------------------------------------
+# FUNCTION sum_tuples
+# ------------------------------------------
+def sum_tuples(t1, t2):
+  
+  numReviews = t1[0] + t2[0]
+  numNegReviews = t1[1] + t2[1]
+  pounts = t1[2] + t2[2]
+  
+  return (numReviews, numNegReviews, points)
+  
+  
 # ------------------------------------------
 # FUNCTION my_main
 # ------------------------------------------
@@ -60,15 +73,21 @@ def my_main(dataset_dir, result_dir, percentage_f):
   #Split into key words
   splitRDD = dictionaryRDD.map(lambda x: my_split(x))
   # before (cuisine,(points, evaluation))
-  #tuple(map(sum,zip(a,b)))
-  filterRDD = splitRDD.reduceByKey(lambda x, y: tuple(map(sum, zip(my_reduce(x),my_reduce(y))))).sortBy(lambda x: x[1][0], False)
- 
+  #map(operator.add, first,second) 
+  #.sortBy(lambda x: x[1][0], False)
+  mapRDD = splitRDD.map(lambda x: my_reduce(x))
+  #filterRDD = splitRDD.reduceByKey(lambda x, y: tuple(map(sum, zip(my_reduce(x), my_reduce(y))))).sortBy(lambda x: x[1][0], False)
+  filterRDD = mapRDD.reduceByKey(lambda x, y: tuple(map(sum, zip(x,y)))).sortBy(lambda x: x[1][0], False)
+  
+  
+  
+  # after (cuisine,(numReviews, numNegReviews, points))
   #9. Save results to text files
   #sortedRDD.saveAsTextFile(result_dir)
   
   #res = filterRDD
   
-  for item in filterRDD.take(20):
+  for item in filterRDD.take(50):
     print(item)
  
 
