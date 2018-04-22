@@ -11,8 +11,9 @@
 # --------------------------------------------------------
 
 import json
+from __future__ import division
 accum = sc.accumulator(0)
-accum2 = sc.accumulator(0)
+
 # ------------------------------------------
 # FUNCTION my_split
 # ------------------------------------------
@@ -48,30 +49,47 @@ def my_reduce(x):
   
   return (cuisine,(numReviews, numNegReviews, points))
 # ------------------------------------------
-# FUNCTION get_averages
+# FUNCTION get_averages - I thought he wanted average per cuisine so ignore function
 # ------------------------------------------
-def get_averages(x, total_reviews):
+# def get_averages(x, total_reviews):
   
-  cuisine = x[0]
-  cuisine_reviews = x[1][0]
-  numNegReviews = x[1][1]
-  points = x[1][2]
-  average = float(float(total_reviews)/float(cuisine_reviews))
+#   cuisine = x[0]
+#   cuisine_reviews = x[1][0]
+#   numNegReviews = x[1][1]
+#   points = x[1][2]
+#   average = float(float(total_reviews)/float(cuisine_reviews))
   
-  return (cuisine, (cuisine_reviews, numNegReviews, points, round(average,1)))
+#   return (cuisine, (cuisine_reviews, numNegReviews, points, round(average,1)))
  
 # ------------------------------------------
 # FUNCTION my_remove
 # ------------------------------------------
-# def my_remove(x, percentage_f):
-#   cuisine = x[0]
-#   reviews = x[1][0]
-#   numNegReviews = x[1][1]
-#   points = x[1][2]
-#   average = x[1][3]
-#   
-#   if reviews >= average
-    
+def my_remove(x, percentage_f, average_reviews):
+
+  reviews = x[1][0]
+  numNegReviews = x[1][1]
+  percentage_bad_reviews = (numNegReviews/average_reviews) * 100
+  #rounded_p = round(percentage_bad_reviews, 1)
+  
+  if reviews >= average_reviews and percentage_bad_reviews < float(percentage_f):    
+    return True
+  else:
+    return False
+  
+# ------------------------------------------
+# FUNCTION my_remove
+# ------------------------------------------
+def my_sort(x):
+  
+  cuisine = x[0]
+  reviews = x[1][0]
+  numNegReviews = x[1][1]
+  points = points = x[1][2]  
+  average_points_per_view = points/reviews
+  
+  return (cuisine, (reviews, numNegReviews, points, average_points_per_view ))
+  
+  
 # ------------------------------------------
 # FUNCTION my_main
 # ------------------------------------------
@@ -80,7 +98,7 @@ def my_main(dataset_dir, result_dir, percentage_f):
   #Read each line
   inputRDD = sc.textFile(dataset_dir) 
 
-  #2. Convert line to string and map to dictionary
+   #Convert line to string and map to dictionary
   dictionaryRDD = inputRDD.map(lambda x: json.loads(x))
   
   #Split into key words
@@ -93,36 +111,37 @@ def my_main(dataset_dir, result_dir, percentage_f):
   
   #Old version reduce by key
   #filterRDD = splitRDD.reduceByKey(lambda x, y: tuple(map(sum, zip(my_reduce(x), my_reduce(y))))).sortBy(lambda x: x[1][0], False)
-  
+  #.sortBy(lambda x: x[1][0], False)
   #new working version reduce by key in correct format
   filterRDD = mapRDD.reduceByKey(lambda x, y: tuple(map(sum, zip(x,y)))).sortBy(lambda x: x[1][0], False)
   
   # after (cuisine,(numReviews, numNegReviews, points))
   
-  #Get total reviews from accum1
-  total_reviews = splitRDD.count()
-  #Get total reviews from accum2
+  #Get total reviews from accum1 cause less taxing
+  total_reviews = accum.value
+  #Get total reviews count, more costly but only way I could get all cuisines.
   total_cuisines = filterRDD.count()
-  #Get average reviews for all cuisines
+  #Get average reviews for all cuisines  
+  average_reviews = total_reviews / total_cuisines
   
-  average_reviews = float(float(total_reviews) / float(total_cuisines))
-  print(total_reviews)
-  print(total_cuisines)
-  print(average_reviews)
+#   print(total_reviews)
+#   print(total_cuisines)
+#   print(average_reviews)
   #Find average views for all cuisines
   #averageRDD = filterRDD.map(lambda x: get_averages(x, total_reviews))
   #averageRDD.persist()
   
-  #removeRDD = filterRDD.map(lambda x: my_remove(x, percentage_f, ))
+  removeRDD = filterRDD.filter(lambda x: my_remove(x, percentage_f, average_reviews))
   
- 
-  #9. Save results to text files
+  sortRDD = removeRDD.map(lambda x: my_sort(x)).sortBy(lambda x: x[1][3], False)
+  
+  #Save results to text files
   #sortedRDD.saveAsTextFile(result_dir)
   
   #res = filterRDD
   
-#   for item in splitRDD.take(30):
-#     print(item)
+  for item in sortRDD.take(10):
+    print(item)
  
 
   pass
@@ -135,16 +154,16 @@ def my_main(dataset_dir, result_dir, percentage_f):
 # its execution.
 # ---------------------------------------------------------------
 if __name__ == '__main__':
-    # 1. We provide the path to the input folder (dataset) and output folder (Spark job result)
+    
     source_dir = "/FileStore/tables/A02/my_dataset/"
     result_dir = "/FileStore/tables/A02/my_result/"
 
-    # 2. We add any extra variable we want to use
-    percentage_f = 10
+   
+    percentage_f = 22
 
-    # 3. We remove the monitoring and output directories
+    
     dbutils.fs.rm(result_dir, True)
 
-    # 5. We call to our main function
+    
     my_main(source_dir, result_dir, percentage_f)
 
