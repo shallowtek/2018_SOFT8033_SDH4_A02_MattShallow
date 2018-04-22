@@ -11,10 +11,10 @@
 # --------------------------------------------------------
 
 import json
-
-
+accum = sc.accumulator(0)
+accum2 = sc.accumulator(0)
 # ------------------------------------------
-# FUNCTION my_parse
+# FUNCTION my_split
 # ------------------------------------------
 def my_split(x):
   
@@ -36,7 +36,7 @@ def my_reduce(x):
   points = 0
   numReviews = 1
   numNegReviews = 0
-  
+  accum.add(1)
   
   if my_tuple[1] == "Negative":
     numNegReviews = 1
@@ -48,17 +48,30 @@ def my_reduce(x):
   
   return (cuisine,(numReviews, numNegReviews, points))
 # ------------------------------------------
-# FUNCTION sum_tuples
+# FUNCTION get_averages
 # ------------------------------------------
-def sum_tuples(t1, t2):
+def get_averages(x, total_reviews):
   
-  numReviews = t1[0] + t2[0]
-  numNegReviews = t1[1] + t2[1]
-  pounts = t1[2] + t2[2]
+  cuisine = x[0]
+  cuisine_reviews = x[1][0]
+  numNegReviews = x[1][1]
+  points = x[1][2]
+  average = float(float(total_reviews)/float(cuisine_reviews))
   
-  return (numReviews, numNegReviews, points)
-  
-  
+  return (cuisine, (cuisine_reviews, numNegReviews, points, round(average,1)))
+ 
+# ------------------------------------------
+# FUNCTION my_remove
+# ------------------------------------------
+# def my_remove(x, percentage_f):
+#   cuisine = x[0]
+#   reviews = x[1][0]
+#   numNegReviews = x[1][1]
+#   points = x[1][2]
+#   average = x[1][3]
+#   
+#   if reviews >= average
+    
 # ------------------------------------------
 # FUNCTION my_main
 # ------------------------------------------
@@ -72,23 +85,44 @@ def my_main(dataset_dir, result_dir, percentage_f):
   
   #Split into key words
   splitRDD = dictionaryRDD.map(lambda x: my_split(x))
+  
   # before (cuisine,(points, evaluation))
-  #map(operator.add, first,second) 
-  #.sortBy(lambda x: x[1][0], False)
+  
+  #Get into a format that can be reduced by key (cuisine, (numReviews, numNegReviews, points))
   mapRDD = splitRDD.map(lambda x: my_reduce(x))
+  
+  #Old version reduce by key
   #filterRDD = splitRDD.reduceByKey(lambda x, y: tuple(map(sum, zip(my_reduce(x), my_reduce(y))))).sortBy(lambda x: x[1][0], False)
+  
+  #new working version reduce by key in correct format
   filterRDD = mapRDD.reduceByKey(lambda x, y: tuple(map(sum, zip(x,y)))).sortBy(lambda x: x[1][0], False)
   
-  
-  
   # after (cuisine,(numReviews, numNegReviews, points))
+  
+  #Get total reviews from accum1
+  total_reviews = splitRDD.count()
+  #Get total reviews from accum2
+  total_cuisines = filterRDD.count()
+  #Get average reviews for all cuisines
+  
+  average_reviews = float(float(total_reviews) / float(total_cuisines))
+  print(total_reviews)
+  print(total_cuisines)
+  print(average_reviews)
+  #Find average views for all cuisines
+  #averageRDD = filterRDD.map(lambda x: get_averages(x, total_reviews))
+  #averageRDD.persist()
+  
+  #removeRDD = filterRDD.map(lambda x: my_remove(x, percentage_f, ))
+  
+ 
   #9. Save results to text files
   #sortedRDD.saveAsTextFile(result_dir)
   
   #res = filterRDD
   
-  for item in filterRDD.take(50):
-    print(item)
+#   for item in splitRDD.take(30):
+#     print(item)
  
 
   pass

@@ -20,3 +20,5 @@ Try get reduce working and combine tuples(broken)
 22-April-18
 
 Finally got the bloody thing to reduce by key argh!!!
+
+Get Average (did total reviews/ cuisine and total revieews/ total cusine reviews) Not sure what he wanted exactly.
