@@ -30,3 +30,5 @@ Fix hint-1 - working as should now (wrong way to calculate percentage)
 23-April-18
 
 Set up Hint2 
+
+Add and alter same code in Hint1 - see what changes need to be made for streaming

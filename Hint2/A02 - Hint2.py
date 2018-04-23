@@ -13,8 +13,7 @@
 import time
 from pyspark.streaming import StreamingContext
 import json
-from __future__ import division
-
+accum = sc.accumulator(0)
 
 # ------------------------------------------
 # FUNCTION my_split - extract from dictionary the cuisine, points and evaluation
@@ -86,13 +85,9 @@ def my_sort(x):
 def my_model(ssc, monitoring_dir, result_dir, percentage_f):
   
   inputRDD = ssc.textFileStream(monitoring_dir)
-  
-  inputRDD.cache()
- 
 
   dictionaryRDD = inputRDD.map(lambda x: json.loads(x))
-  
-  
+    
   splitRDD = dictionaryRDD.map(my_split)
 
   #Get into a format that can be reduced by key (cuisine, (numReviews, numNegReviews, points))
@@ -100,31 +95,33 @@ def my_model(ssc, monitoring_dir, result_dir, percentage_f):
   
   #Old version reduce by key
   #filterRDD = splitRDD.reduceByKey(lambda x, y: tuple(map(sum, zip(my_reduce(x), my_reduce(y))))).sortBy(lambda x: x[1][0], False)
-  
+  #.sortBy(lambda x: x[1][0], False)
   #new working version reduce by key in correct format
-  filterRDD = mapRDD.reduceByKey(lambda x, y: tuple(map(sum, zip(x,y)))).sortBy(lambda x: x[1][0], False)
-  
+  filterRDD = mapRDD.reduceByKey(lambda x, y: tuple(map(sum, zip(x,y))))
+  total_cuisines = filterRDD.count()
+  transFilterRDD = filterRDD.transform(lambda x: filterRDD.sortBy(lambda x: x[1][0], False))
   # after (cuisine,(numReviews, numNegReviews, points))
   
   #Get total reviews from accum1 cause less taxing
   total_reviews = accum.value
   #Get total reviews count, more costly but only way I could get all cuisines.
-  total_cuisines = filterRDD.count()
+  
   #Get average reviews for all cuisines  
   average_reviews = total_reviews / total_cuisines
   
   #remove ones that do not pass conditions
-  removeRDD = filterRDD.filter(lambda x: my_remove(x, percentage_f, average_reviews))
-  
+  removeRDD = transFilterRDD.filter(lambda x: my_remove(x, percentage_f, average_reviews))
+  #.sortBy(lambda x: x[1][3], False)
   #sort by decreasing order of average points
-  sortRDD = removeRDD.map(lambda x: my_sort(x)).sortBy(lambda x: x[1][3], False)
+  sortRDD = removeRDD.map(lambda x: my_sort(x))
   
+  transSorRDD = sortRDD.transform(lambda x: sortRDD.sortBy(lambda x: x[1][3], False) )
   #Save to text files
-  sortRDD.saveAsTextFile(result_dir)
+  transSorRDD.saveAsTextFile(result_dir)
 
   
-  for item in sortRDD.take(10):
-    print(item)
+  #for item in sortRDD.take(10):
+    #print(item)
     
     
   pass
