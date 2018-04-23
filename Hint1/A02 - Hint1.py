@@ -67,7 +67,7 @@ def my_remove(x, percentage_f, average_reviews):
 
   reviews = x[1][0]
   numNegReviews = x[1][1]
-  percentage_bad_reviews = (numNegReviews/reviews) * 100
+  percentage_bad_reviews = float(float(numNegReviews)/float(reviews)) * 100
   #rounded_p = round(percentage_bad_reviews, 1)
   
   if reviews >= average_reviews and percentage_bad_reviews < float(percentage_f):    
@@ -84,7 +84,7 @@ def my_sort(x):
   reviews = x[1][0]
   numNegReviews = x[1][1]
   points = points = x[1][2]  
-  average_points_per_view = points/reviews
+  average_points_per_view = float(float(points)/float(reviews))
   
   return (cuisine, (reviews, numNegReviews, points, average_points_per_view ))
   
@@ -121,7 +121,7 @@ def my_main(dataset_dir, result_dir, percentage_f):
   #Get total reviews count, more costly but only way I could get all cuisines.
   total_cuisines = filterRDD.count()
   #Get average reviews for all cuisines  
-  average_reviews = total_reviews / total_cuisines
+  average_reviews = float(float(total_reviews) / float(total_cuisines))
   
 #   print(total_reviews)
 #   print(total_cuisines)
@@ -137,14 +137,12 @@ def my_main(dataset_dir, result_dir, percentage_f):
   sortRDD = removeRDD.map(lambda x: my_sort(x)).sortBy(lambda x: x[1][3], False)
   
   #Save to text files
-  sortRDD.saveAsTextFile(result_dir)
+  #sortRDD.saveAsTextFile(result_dir)
 
   
   for item in sortRDD.take(10):
     print(item)
  
-
-  pass
 
 # ---------------------------------------------------------------
 #           PYTHON EXECUTION

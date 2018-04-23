@@ -38,3 +38,7 @@ More attempts - not working
 Working but need to fix the way it counts averages
 
 No longer working - Fix accumulator
+
+Had to fix issue float issue in Hint 1. 
+
+Remove accumulator. Try count on DStream again

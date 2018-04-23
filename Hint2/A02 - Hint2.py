@@ -14,9 +14,10 @@ import time
 from pyspark.streaming import StreamingContext
 import json
 
-
 accum = sc.accumulator(1)
 accum1 = sc.accumulator(1)
+
+
 
 # ------------------------------------------
 # FUNCTION my_split - extract from dictionary the cuisine, points and evaluation
@@ -60,7 +61,7 @@ def my_remove(x, percentage_f, average_reviews):
   
   reviews = x[1][0]
   numNegReviews = x[1][1]
-  percentage_bad_reviews = (numNegReviews/reviews) * 100
+  percentage_bad_reviews = float((float(numNegReviews)/float(reviews)) * 100)
   
   if reviews >= average_reviews and percentage_bad_reviews < float(percentage_f):    
     return True
@@ -79,43 +80,35 @@ def my_sort(x):
   average_points_per_view = float(float(points)/float(reviews))
   
   return (cuisine, (reviews, numNegReviews, points, average_points_per_view ))
-
-# ------------------------------------------
-# FUNCTION test_reduce
-# ------------------------------------------
-def test_reduce(x, y):
   
-  accum1.add(1)
-  
-  return zip(x,y)
 
 # ------------------------------------------
 # FUNCTION my_model
 # ------------------------------------------
 def my_model(ssc, monitoring_dir, result_dir, percentage_f):
-  
-  
+    
   inputRDD = ssc.textFileStream(monitoring_dir)
     
   dictionaryRDD = inputRDD.map(lambda x: json.loads(x))
     
   splitRDD = dictionaryRDD.map(lambda x: my_split(x))
   
-  accum = sc.accumulator(1)
-  accum1 = sc.accumulator(1)
-  
   mapRDD = splitRDD.map(lambda x: my_filter(x))
  
-  filterRDD = mapRDD.reduceByKey(lambda x, y: tuple(map(sum, test_reduce(x, y))))
+  filterRDD = mapRDD.reduceByKey(lambda x, y: tuple(map(sum, zip(x, y))))
    
   #SORT
   transFilterRDD = filterRDD.transform(lambda x: x.sortBy(lambda x: x[1][0], False))
   
   
-  total_reviews = accum.value
-  total_cuisines = accum1.value
-  average_reviews = total_reviews / total_cuisines
-
+  map_reviews = mapRDD.count()
+  
+  map_reviews.pprint()
+  
+  total_cuisines = accum1.value 
+  print(total_cuisines)
+#   average_reviews = float(float(total_reviews) / float(total_cuisines))
+  average_reviews = 6.0
   #remove ones that do not pass conditions
   removeRDD = transFilterRDD.filter(lambda x: my_remove(x, percentage_f, average_reviews))
   sortRDD = removeRDD.map(lambda x: my_sort(x))
@@ -125,9 +118,11 @@ def my_model(ssc, monitoring_dir, result_dir, percentage_f):
   #Save to text files
   
   transSortRDD.saveAsTextFiles(result_dir)
-  transSortRDD.pprint()
+#   transSortRDD.pprint()
   #for item in sortRDD.take(10):
     #print(item)
+    
+    
   pass
   
     
