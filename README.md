@@ -26,3 +26,7 @@ Get Average (did total reviews/ cuisine and total revieews/ total cusine reviews
 Finish hint-1 
 
 Fix hint-1 - working as should now (wrong way to calculate percentage)
+
+23-April-18
+
+Set up Hint2 
