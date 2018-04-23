@@ -11,11 +11,10 @@
 # --------------------------------------------------------
 
 import json
-from __future__ import division
 accum = sc.accumulator(0)
 
 # ------------------------------------------
-# FUNCTION my_split
+# FUNCTION my_split - extract from dictionary the cuisine, points and evaluation
 # ------------------------------------------
 def my_split(x):
   
@@ -28,7 +27,8 @@ def my_split(x):
   return (cuisine, (points, evaluation))
 
 # ------------------------------------------
-# FUNCTION my_reduce
+# FUNCTION my_reduce - at 1 to each review and neg review while also adding or subtracting points
+#Depending if negative or positive.
 # ------------------------------------------
 def my_reduce(x):
 
@@ -44,12 +44,11 @@ def my_reduce(x):
     points -= my_tuple[0]
   else:
     points = points + my_tuple[0]
-    
   
   
   return (cuisine,(numReviews, numNegReviews, points))
 # ------------------------------------------
-# FUNCTION get_averages - I thought he wanted average per cuisine so ignore function
+# FUNCTION get_averages - I thought he wanted average per cuisine so ignore this function
 # ------------------------------------------
 # def get_averages(x, total_reviews):
   
@@ -62,13 +61,13 @@ def my_reduce(x):
 #   return (cuisine, (cuisine_reviews, numNegReviews, points, round(average,1)))
  
 # ------------------------------------------
-# FUNCTION my_remove
+# FUNCTION my_remove - removing ones that dont pass conditions
 # ------------------------------------------
 def my_remove(x, percentage_f, average_reviews):
 
   reviews = x[1][0]
   numNegReviews = x[1][1]
-  percentage_bad_reviews = (numNegReviews/average_reviews) * 100
+  percentage_bad_reviews = (numNegReviews/reviews) * 100
   #rounded_p = round(percentage_bad_reviews, 1)
   
   if reviews >= average_reviews and percentage_bad_reviews < float(percentage_f):    
@@ -77,7 +76,7 @@ def my_remove(x, percentage_f, average_reviews):
     return False
   
 # ------------------------------------------
-# FUNCTION my_remove
+# FUNCTION my_sort - sorting the RDD while adding average points
 # ------------------------------------------
 def my_sort(x):
   
@@ -104,14 +103,14 @@ def my_main(dataset_dir, result_dir, percentage_f):
   #Split into key words
   splitRDD = dictionaryRDD.map(lambda x: my_split(x))
   
-  # before (cuisine,(points, evaluation))
+  # split returns following format (cuisine,(points, evaluation))
   
   #Get into a format that can be reduced by key (cuisine, (numReviews, numNegReviews, points))
   mapRDD = splitRDD.map(lambda x: my_reduce(x))
   
   #Old version reduce by key
   #filterRDD = splitRDD.reduceByKey(lambda x, y: tuple(map(sum, zip(my_reduce(x), my_reduce(y))))).sortBy(lambda x: x[1][0], False)
-  #.sortBy(lambda x: x[1][0], False)
+  
   #new working version reduce by key in correct format
   filterRDD = mapRDD.reduceByKey(lambda x, y: tuple(map(sum, zip(x,y)))).sortBy(lambda x: x[1][0], False)
   
@@ -127,18 +126,19 @@ def my_main(dataset_dir, result_dir, percentage_f):
 #   print(total_reviews)
 #   print(total_cuisines)
 #   print(average_reviews)
-  #Find average views for all cuisines
+  #Find average views for all cuisines (no longer needed)
   #averageRDD = filterRDD.map(lambda x: get_averages(x, total_reviews))
   #averageRDD.persist()
   
+  #remove ones that do not pass conditions
   removeRDD = filterRDD.filter(lambda x: my_remove(x, percentage_f, average_reviews))
   
+  #sort by decreasing order of average points
   sortRDD = removeRDD.map(lambda x: my_sort(x)).sortBy(lambda x: x[1][3], False)
   
-  #Save results to text files
-  #sortedRDD.saveAsTextFile(result_dir)
-  
-  #res = filterRDD
+  #Save to text files
+  sortRDD.saveAsTextFile(result_dir)
+
   
   for item in sortRDD.take(10):
     print(item)
@@ -159,7 +159,7 @@ if __name__ == '__main__':
     result_dir = "/FileStore/tables/A02/my_result/"
 
    
-    percentage_f = 22
+    percentage_f = 10
 
     
     dbutils.fs.rm(result_dir, True)
