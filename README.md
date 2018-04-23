@@ -36,3 +36,5 @@ Add and alter same code in Hint1 - see what changes need to be made for streamin
 More attempts - not working
 
 Working but need to fix the way it counts averages
+
+No longer working - Fix accumulator
