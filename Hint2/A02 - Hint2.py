@@ -13,6 +13,7 @@
 import time
 from pyspark.streaming import StreamingContext
 import json
+
 accum = sc.accumulator(0)
 
 # ------------------------------------------
@@ -32,7 +33,7 @@ def my_split(x):
 # FUNCTION my_reduce - at 1 to each review and neg review while also adding or subtracting points
 #Depending if negative or positive.
 # ------------------------------------------
-def my_reduce(x):
+def my_filter(x):
 
   my_tuple = x[1]
   cuisine = x[0]
@@ -86,44 +87,46 @@ def my_model(ssc, monitoring_dir, result_dir, percentage_f):
   
   inputRDD = ssc.textFileStream(monitoring_dir)
 
+ 
+    
   dictionaryRDD = inputRDD.map(lambda x: json.loads(x))
     
   splitRDD = dictionaryRDD.map(my_split)
 
-  #Get into a format that can be reduced by key (cuisine, (numReviews, numNegReviews, points))
-  mapRDD = splitRDD.map(lambda x: my_reduce(x))
   
-  #Old version reduce by key
-  #filterRDD = splitRDD.reduceByKey(lambda x, y: tuple(map(sum, zip(my_reduce(x), my_reduce(y))))).sortBy(lambda x: x[1][0], False)
+  mapRDD = splitRDD.map(lambda x: my_filter(x))
+  
   #.sortBy(lambda x: x[1][0], False)
-  #new working version reduce by key in correct format
+ 
   filterRDD = mapRDD.reduceByKey(lambda x, y: tuple(map(sum, zip(x,y))))
-  total_cuisines = filterRDD.count()
-  transFilterRDD = filterRDD.transform(lambda x: filterRDD.sortBy(lambda x: x[1][0], False))
-  # after (cuisine,(numReviews, numNegReviews, points))
   
-  #Get total reviews from accum1 cause less taxing
   total_reviews = accum.value
-  #Get total reviews count, more costly but only way I could get all cuisines.
-  
-  #Get average reviews for all cuisines  
+  total_cuisines = filterRDD.count()
   average_reviews = total_reviews / total_cuisines
+  
+  #SORT
+  transFilterRDD = filterRDD.transform(lambda x: filterRDD.sortBy(lambda x: x[1][0], False))
+  
+  
   
   #remove ones that do not pass conditions
   removeRDD = transFilterRDD.filter(lambda x: my_remove(x, percentage_f, average_reviews))
-  #.sortBy(lambda x: x[1][3], False)
-  #sort by decreasing order of average points
-  sortRDD = removeRDD.map(lambda x: my_sort(x))
-  
-  transSorRDD = sortRDD.transform(lambda x: sortRDD.sortBy(lambda x: x[1][3], False) )
-  #Save to text files
-  transSorRDD.saveAsTextFile(result_dir)
 
+  sortRDD = removeRDD.map(lambda x: my_sort(x))
+  #.sortBy(lambda x: x[1][3], False)
   
+  #SORT
+  transSortRDD = sortRDD.transform(lambda x: sortRDD.sortBy(lambda x: x[1][3], False) )
+  
+  #Save to text files
+  transSortRDD.saveAsTextFile(result_dir)
+
+  transSortRDD.pprint()
   #for item in sortRDD.take(10):
     #print(item)
-    
-    
+   
+  
+   
   pass
 
 # ------------------------------------------
