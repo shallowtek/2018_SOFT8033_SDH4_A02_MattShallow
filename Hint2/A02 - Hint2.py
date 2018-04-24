@@ -14,9 +14,8 @@ import time
 from pyspark.streaming import StreamingContext
 import json
 
-accum = sc.accumulator(1)
-accum1 = sc.accumulator(1)
-
+# accum = sc.accumulator(0)
+# accum1 = sc.accumulator(0)
 
 
 # ------------------------------------------
@@ -37,13 +36,12 @@ def my_split(x):
 #Depending if negative or positive.
 # ------------------------------------------
 def my_filter(x):
-
+  
   my_tuple = x[1]
   cuisine = x[0]
   points = 0
   numReviews = 1
-  numNegReviews = 0
-  accum.add(1)
+  numNegReviews = 0  
   
   if my_tuple[1] == "Negative":
     numNegReviews = 1
@@ -57,10 +55,12 @@ def my_filter(x):
 # ------------------------------------------
 # FUNCTION my_remove - removing ones that dont pass conditions
 # ------------------------------------------
-def my_remove(x, percentage_f, average_reviews):
+def my_remove(x, percentage_f):
   
   reviews = x[1][0]
   numNegReviews = x[1][1]
+  average_reviews = x[1][4]
+  print("average: " + str(average_reviews))
   percentage_bad_reviews = float((float(numNegReviews)/float(reviews)) * 100)
   
   if reviews >= average_reviews and percentage_bad_reviews < float(percentage_f):    
@@ -71,53 +71,84 @@ def my_remove(x, percentage_f, average_reviews):
 # ------------------------------------------
 # FUNCTION my_sort - sorting the RDD while adding average points
 # ------------------------------------------
-def my_sort(x):
+# def my_sort(x):
   
-  cuisine = x[0]
-  reviews = x[1][0]
-  numNegReviews = x[1][1]
-  points = points = x[1][2]  
+#   cuisine = x[0]
+#   reviews = x[1][0]
+#   numNegReviews = x[1][1]
+#   points = points = x[1][2]  
+#   average_points_per_view = float(float(points)/float(reviews))
+  
+#   return (cuisine, (reviews, numNegReviews, points, average_points_per_view ))
+
+
+def test_remove(x, percentage_f):
+  
+#   ('line', (((70, 4, 434), u'American '), 6))
+
+  cuisine = x[1][0][1]
+  reviews = x[1][0][0][0]
+  numNegReviews = x[1][0][0][1]
+  points = x[1][0][0][2]
+  average_reviews = x[1][1]
+  print("average: " + str(average_reviews))
+  percentage_bad_reviews = float((float(numNegReviews)/float(reviews)) * 100)
   average_points_per_view = float(float(points)/float(reviews))
   
-  return (cuisine, (reviews, numNegReviews, points, average_points_per_view ))
+  if reviews >= average_reviews and percentage_bad_reviews < float(percentage_f):    
+    return (cuisine, (reviews, numNegReviews, points, average_points_per_view))
+  else:
+    return "empty"
+  
   
 
 # ------------------------------------------
 # FUNCTION my_model
 # ------------------------------------------
 def my_model(ssc, monitoring_dir, result_dir, percentage_f):
-    
+  
   inputRDD = ssc.textFileStream(monitoring_dir)
     
   dictionaryRDD = inputRDD.map(lambda x: json.loads(x))
     
-  splitRDD = dictionaryRDD.map(lambda x: my_split(x))
+  splitRDD = dictionaryRDD.map(lambda x: my_split(x))  
   
   mapRDD = splitRDD.map(lambda x: my_filter(x))
- 
+  mapRDD.cache()
+  
   filterRDD = mapRDD.reduceByKey(lambda x, y: tuple(map(sum, zip(x, y))))
-   
+    
   #SORT
   transFilterRDD = filterRDD.transform(lambda x: x.sortBy(lambda x: x[1][0], False))
   
+  reviews_count = mapRDD.count().map(lambda x: ("line", x))
+  cuisines_count = filterRDD.count().map(lambda x: ("line", x))
   
-  map_reviews = mapRDD.count()
-  
-  map_reviews.pprint()
-  
-  total_cuisines = accum1.value 
-  print(total_cuisines)
-#   average_reviews = float(float(total_reviews) / float(total_cuisines))
-  average_reviews = 6.0
-  #remove ones that do not pass conditions
-  removeRDD = transFilterRDD.filter(lambda x: my_remove(x, percentage_f, average_reviews))
-  sortRDD = removeRDD.map(lambda x: my_sort(x))
+  #("line", (243, 24))
+  joined = reviews_count.join(cuisines_count)
+  #("line", 6)
 
-  #SORT
-  transSortRDD = sortRDD.transform(lambda x: x.sortBy(lambda x: x[1][3], False) )
-  #Save to text files
   
-  transSortRDD.saveAsTextFiles(result_dir)
+  averages = joined.map(lambda x: ("line", (x[1][0] / x[1][1])))
+  
+#   reviews_map = transFilterRDD.transform(lambda x: x.map( lambda y: ("line", (y[1], y[0]))))
+  reviews_map = transFilterRDD.map(lambda x: ("line", (x[1], x[0])))
+  reviews_join = reviews_map.join(averages)
+  
+#   ('line', (((70, 4, 434), u'American '), 6))
+
+#   newRDD = transFilterRDD.map(lambda x: x.map(lambda y: my_transform(x, y)))
+  
+  removeRDD = reviews_join.map(lambda x: test_remove(x, percentage_f)).filter(lambda x: x != "empty")
+  
+#   removeRDD = reviews_join.map(lambda x: x[1][1])
+#   sortRDD = removeRDD.map(lambda x: my_sort(x))
+  
+  #SORT
+  transSortRDD = removeRDD.transform(lambda x: x.sortBy(lambda x: x[1][3], False))
+  #Save to text files
+  transSortRDD.pprint()
+#   transSortRDD.saveAsTextFiles(result_dir)
 #   transSortRDD.pprint()
   #for item in sortRDD.take(10):
     #print(item)

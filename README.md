@@ -42,3 +42,7 @@ No longer working - Fix accumulator
 Had to fix issue float issue in Hint 1. 
 
 Remove accumulator. Try count on DStream again
+
+24-April-18
+
+Hint 2 finished. Using new joins. Might need to be tidied. Needs lots of commenting.
