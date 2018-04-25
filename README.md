@@ -52,3 +52,5 @@ Hint 2 finished. Using new joins. Might need to be tidied. Needs lots of comment
 Comment Code for Hint 2 - Starting Hint 3
 
 Move Hint-2 code to Hint-3
+
+Finished Hint-3

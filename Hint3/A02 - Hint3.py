@@ -14,9 +14,6 @@ import time
 from pyspark.streaming import StreamingContext
 import json
 
-# accum = sc.accumulator(0)
-# accum1 = sc.accumulator(0)
-
 
 # ------------------------------------------
 # FUNCTION my_split - extract from dictionary the cuisine, points and evaluation
@@ -51,37 +48,11 @@ def my_filter(x):
    
   return (cuisine,(numReviews, numNegReviews, points))
  
-# ------------------------------------------
-# FUNCTION my_remove - removing ones that dont pass conditions 
-# ------------------------------------------
-# def my_remove(x, percentage_f):
-  
-#   reviews = x[1][0]
-#   numNegReviews = x[1][1]
-#   average_reviews = x[1][4]
-#   print("average: " + str(average_reviews))
-#   percentage_bad_reviews = float((float(numNegReviews)/float(reviews)) * 100)
-  
-#   if reviews >= average_reviews and percentage_bad_reviews < float(percentage_f):    
-#     return True
-#   else:
-#     return False
-  
-# ------------------------------------------
-# FUNCTION my_sort - sorting the RDD while adding average points
-# ------------------------------------------
-# def my_sort(x):
-  
-#   cuisine = x[0]
-#   reviews = x[1][0]
-#   numNegReviews = x[1][1]
-#   points = points = x[1][2]  
-#   average_points_per_view = float(float(points)/float(reviews))
-  
-#   return (cuisine, (reviews, numNegReviews, points, average_points_per_view ))
 
-
-# This function allows me to extract values I need from a new formed tuple (below)
+# ------------------------------------------
+# FUNCTION test_reduce - does a few calculations such as get average points and % bad reviews
+# It then filters these out and returns a new tuple in the format I need
+# ------------------------------------------
 def test_remove(x, percentage_f):
   
 # New tuple to extract from:  ('line', (((70, 4, 434), u'American '), 6))
@@ -104,17 +75,19 @@ def test_remove(x, percentage_f):
     return "empty"
   
   
-
 # ------------------------------------------
 # FUNCTION my_model
 # ------------------------------------------
-def my_model(ssc, monitoring_dir, result_dir, percentage_f):
-  
+def my_model(ssc, monitoring_dir, result_dir, percentage_f, window_duration, sliding_duration):
+      
 # Create DStream from files in monitoring dir  
   inputDStream = ssc.textFileStream(monitoring_dir)
   
+# Create a windowed Dstream based on sliding duration and time step. Now it will process based on a window
+  windowDStream = inputDStream.window(window_duration * time_step_interval, sliding_duration * time_step_interval)
+     
 # Create a dictionary DStream for each line   
-  dictionaryDStream = inputDStream.map(lambda x: json.loads(x))
+  dictionaryDStream = windowDStream.map(lambda x: json.loads(x))
   
 # Extract values I need from Dictionary   
   splitDStream = dictionaryDStream.map(lambda x: my_split(x)) 
@@ -124,7 +97,7 @@ def my_model(ssc, monitoring_dir, result_dir, percentage_f):
 #   mapDStream.cache()
 # I reduce by key combining the tuples for each key using sum and zip  
   filterDStream = mapDStream.reduceByKey(lambda x, y: tuple(map(sum, zip(x, y))))
-    
+  
 # I then sort based on key using transform
   transFilterDStream = filterDStream.transform(lambda x: x.sortBy(lambda x: x[1][0], False))
   
@@ -151,22 +124,23 @@ def my_model(ssc, monitoring_dir, result_dir, percentage_f):
   
 # I sort in order decreasing of points
   transSortDStream = removeDStream.transform(lambda x: x.sortBy(lambda x: x[1][3], False))
-  
+#   transSortDStream.cache()
 # Save to text files
 # transSortDStream.saveAsTextFiles(result_dir)
-
-  transSortDStream.pprint()
- 
-    
+  transSortDStream.pprint() 
     
   pass
-  
-    
 
 # ------------------------------------------
 # FUNCTION create_ssc
 # ------------------------------------------
-def create_ssc(monitoring_dir, result_dir, max_micro_batches, time_step_interval, percentage_f):
+def create_ssc(monitoring_dir,
+               result_dir,
+               max_micro_batches,
+               time_step_interval,
+               percentage_f,
+               window_duration,
+               sliding_duration):
     # 1. We create the new Spark Streaming context.
     # This is the main entry point for streaming functionality. It requires two parameters:
     # (*) The underlying SparkContext that it will use to process the data.
@@ -176,7 +150,7 @@ def create_ssc(monitoring_dir, result_dir, max_micro_batches, time_step_interval
 
     # 2. We configure the maximum amount of time the data is retained.
     # Think of it: If you have a SparkStreaming operating 24/7, the amount of data it is processing will
-    # only grow. This is simply potato unaffordable!
+    # only grow. This is simply unaffordable!
     # Thus, this parameter sets maximum time duration past arrived data is still retained for:
     # Either being processed for first time.
     # Being processed again, for aggregation with new data.
@@ -190,7 +164,7 @@ def create_ssc(monitoring_dir, result_dir, max_micro_batches, time_step_interval
     # This is the main function of the Spark application:
     # On it we specify what do we want the SparkStreaming context to do once it receives data
     # (i.e., the full set of transformations and ouptut operations we want it to perform).
-    my_model(ssc, monitoring_dir, result_dir, percentage_f)
+    my_model(ssc, monitoring_dir, result_dir, percentage_f, window_duration, sliding_duration)
 
     # 4. We return the ssc configured and modelled.
     return ssc
@@ -257,7 +231,11 @@ def my_main(source_dir,
             max_micro_batches,
             time_step_interval,
             verbose,
-            percentage_f):
+            percentage_f,
+            window_duration,
+            sliding_duration,
+            race_conditions_extra_delay
+            ):
     # 1. We setup the Spark Streaming context
     # This sets up the computation that will be done when the system receives data.
     ssc = StreamingContext.getActiveOrCreate(checkpoint_dir,
@@ -265,7 +243,9 @@ def my_main(source_dir,
                                                                 result_dir,
                                                                 max_micro_batches,
                                                                 time_step_interval,
-                                                                percentage_f
+                                                                percentage_f,
+                                                                window_duration,
+                                                                sliding_duration
                                                                 )
                                              )
 
@@ -282,7 +262,10 @@ def my_main(source_dir,
     # we need to call awaitTermination to wait for the streaming computation to finish.
     ssc.awaitTerminationOrTimeout(time_step_interval)
 
-    # 4. We simulate the streaming arrival of files (i.e., one by one) from source_dir to monitoring_dir.
+    if (race_conditions_extra_delay == True):
+        time.sleep((sliding_duration - 1) * time_step_interval)
+
+        # 4. We simulate the streaming arrival of files (i.e., one by one) from source_dir to monitoring_dir.
     streaming_simulation(source_dir, monitoring_dir, time_step_interval, verbose)
 
     # 5. Once we have transferred all files and processed them, we are done.
@@ -304,7 +287,7 @@ def my_main(source_dir,
 #           PYTHON EXECUTION
 # This is the main entry point to the execution of our program.
 # It provides a call to the 'main function' defined in our
-# Python program, makin th Pytho interprete to trigger
+# Python program, making the Python interpreter to trigger
 # its execution.
 # ---------------------------------------------------------------
 if __name__ == '__main__':
@@ -319,7 +302,7 @@ if __name__ == '__main__':
     dataset_micro_batches = 16
 
     # 3. We specify the time interval each of our micro-batches (files) appear for its processing.
-    time_step_interval = 3
+    time_step_interval = 10
 
     # 4. We specify the maximum amount of micro-batches that we want to allow before considering data
     # old and dumping it.
@@ -330,6 +313,12 @@ if __name__ == '__main__':
 
     # 6. Extra input arguments
     percentage_f = 10
+    window_duration = 4
+    sliding_duration = 4
+
+    # 6.4. RACE Conditions: Discussed above. Basically, in which moment of the sliding_window do I want to start.
+    # This performs an extra delay at the start of the file transferred to sync SparkContext with file transferrence.
+    race_conditions_extra_delay = True
 
     # 7. We remove the monitoring and output directories
     dbutils.fs.rm(monitoring_dir, True)
@@ -349,5 +338,8 @@ if __name__ == '__main__':
             max_micro_batches,
             time_step_interval,
             verbose,
-            percentage_f
+            percentage_f,
+            window_duration,
+            sliding_duration,
+            race_conditions_extra_delay
             )
