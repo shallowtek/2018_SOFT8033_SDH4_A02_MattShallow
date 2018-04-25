@@ -32,7 +32,7 @@ def my_split(x):
   return (cuisine, (points, evaluation))
 
 # ------------------------------------------
-# FUNCTION my_reduce - at 1 to each review and neg review while also adding or subtracting points
+# FUNCTION my_reduce - add 1 to each review and neg review while also adding or subtracting points
 #Depending if negative or positive.
 # ------------------------------------------
 def my_filter(x):
@@ -48,25 +48,24 @@ def my_filter(x):
     points -= my_tuple[0]
   else:
     points = points + my_tuple[0]
-  
-  
+   
   return (cuisine,(numReviews, numNegReviews, points))
  
 # ------------------------------------------
-# FUNCTION my_remove - removing ones that dont pass conditions
+# FUNCTION my_remove - removing ones that dont pass conditions 
 # ------------------------------------------
-def my_remove(x, percentage_f):
+# def my_remove(x, percentage_f):
   
-  reviews = x[1][0]
-  numNegReviews = x[1][1]
-  average_reviews = x[1][4]
-  print("average: " + str(average_reviews))
-  percentage_bad_reviews = float((float(numNegReviews)/float(reviews)) * 100)
+#   reviews = x[1][0]
+#   numNegReviews = x[1][1]
+#   average_reviews = x[1][4]
+#   print("average: " + str(average_reviews))
+#   percentage_bad_reviews = float((float(numNegReviews)/float(reviews)) * 100)
   
-  if reviews >= average_reviews and percentage_bad_reviews < float(percentage_f):    
-    return True
-  else:
-    return False
+#   if reviews >= average_reviews and percentage_bad_reviews < float(percentage_f):    
+#     return True
+#   else:
+#     return False
   
 # ------------------------------------------
 # FUNCTION my_sort - sorting the RDD while adding average points
@@ -82,19 +81,23 @@ def my_remove(x, percentage_f):
 #   return (cuisine, (reviews, numNegReviews, points, average_points_per_view ))
 
 
+# This function allows me to extract values I need from a new formed tuple (below)
 def test_remove(x, percentage_f):
   
-#   ('line', (((70, 4, 434), u'American '), 6))
+# New tuple to extract from:  ('line', (((70, 4, 434), u'American '), 6))
 
   cuisine = x[1][0][1]
   reviews = x[1][0][0][0]
   numNegReviews = x[1][0][0][1]
   points = x[1][0][0][2]
   average_reviews = x[1][1]
-  print("average: " + str(average_reviews))
+#   print("average: " + str(average_reviews))
+
+# Calculate % of bad reviews
   percentage_bad_reviews = float((float(numNegReviews)/float(reviews)) * 100)
+# Calculate the average points  
   average_points_per_view = float(float(points)/float(reviews))
-  
+# Filter the reviews and %. Return a new tuple
   if reviews >= average_reviews and percentage_bad_reviews < float(percentage_f):    
     return (cuisine, (reviews, numNegReviews, points, average_points_per_view))
   else:
@@ -107,51 +110,53 @@ def test_remove(x, percentage_f):
 # ------------------------------------------
 def my_model(ssc, monitoring_dir, result_dir, percentage_f):
   
-  inputRDD = ssc.textFileStream(monitoring_dir)
+# Create DStream from files in monitoring dir  
+  inputDStream = ssc.textFileStream(monitoring_dir)
+  
+# Create a dictionary DStream for each line   
+  dictionaryDStream = inputDStream.map(lambda x: json.loads(x))
+  
+# Extract values I need from Dictionary   
+  splitDStream = dictionaryDStream.map(lambda x: my_split(x)) 
+  
+# Filter is used to calculate points and return new tuple in format (cuisine,(numReviews, numNegReviews, points)) 
+  mapDStream = splitDStream.map(lambda x: my_filter(x))
+#   mapDStream.cache()
+# I reduce by key combining the tuples for each key using sum and zip  
+  filterDStream = mapDStream.reduceByKey(lambda x, y: tuple(map(sum, zip(x, y))))
     
-  dictionaryRDD = inputRDD.map(lambda x: json.loads(x))
-    
-  splitRDD = dictionaryRDD.map(lambda x: my_split(x))  
+# I then sort based on key using transform
+  transFilterDStream = filterDStream.transform(lambda x: x.sortBy(lambda x: x[1][0], False))
   
-  mapRDD = splitRDD.map(lambda x: my_filter(x))
-  mapRDD.cache()
+# These two lines purpose is to count reviews and count cuisines  
+  reviews_countDStream = mapDStream.count().map(lambda x: ("line", x))
+  cuisines_countDStream = filterDStream.count().map(lambda x: ("line", x))
   
-  filterRDD = mapRDD.reduceByKey(lambda x, y: tuple(map(sum, zip(x, y))))
-    
-  #SORT
-  transFilterRDD = filterRDD.transform(lambda x: x.sortBy(lambda x: x[1][0], False))
-  
-  reviews_count = mapRDD.count().map(lambda x: ("line", x))
-  cuisines_count = filterRDD.count().map(lambda x: ("line", x))
-  
-  #("line", (243, 24))
-  joined = reviews_count.join(cuisines_count)
-  #("line", 6)
+# I then join the two results and forms new tuples: ("line", (243, 24))
+  joinedDStream = reviews_countDStream.join(cuisines_countDStream)
 
+# I get the average by maping and return a new tuple again: after: ("line", 6)  
+  averagesDStream = joinedDStream.map(lambda x: ("line", (x[1][0] / x[1][1])))
   
-  averages = joined.map(lambda x: ("line", (x[1][0] / x[1][1])))
+# I need to now map the filter DStream so that it has "line" as a key. I move Original key to diff position
+  reviews_mapDStream = transFilterDStream.map(lambda x: ("line", (x[1], x[0])))
   
-#   reviews_map = transFilterRDD.transform(lambda x: x.map( lambda y: ("line", (y[1], y[0]))))
-  reviews_map = transFilterRDD.map(lambda x: ("line", (x[1], x[0])))
-  reviews_join = reviews_map.join(averages)
+# I then join the DStream with my average to the filter DStream giving me a new tuple:
+# ('line', (((70, 4, 434), u'American '), 6))
+  reviews_joinDStream = reviews_mapDStream.join(averagesDStream)
   
-#   ('line', (((70, 4, 434), u'American '), 6))
+# I call my test Remove function which will do two calculations (% and points) and return a new tuple 
+# I then filter out empty results.
+  removeDStream = reviews_joinDStream.map(lambda x: test_remove(x, percentage_f)).filter(lambda x: x != "empty")
+  
+# I sort in order decreasing of points
+  transSortDStream = removeDStream.transform(lambda x: x.sortBy(lambda x: x[1][3], False))
+  
+# Save to text files
+# transSortDStream.saveAsTextFiles(result_dir)
 
-#   newRDD = transFilterRDD.map(lambda x: x.map(lambda y: my_transform(x, y)))
-  
-  removeRDD = reviews_join.map(lambda x: test_remove(x, percentage_f)).filter(lambda x: x != "empty")
-  
-#   removeRDD = reviews_join.map(lambda x: x[1][1])
-#   sortRDD = removeRDD.map(lambda x: my_sort(x))
-  
-  #SORT
-  transSortRDD = removeRDD.transform(lambda x: x.sortBy(lambda x: x[1][3], False))
-  #Save to text files
-  transSortRDD.pprint()
-#   transSortRDD.saveAsTextFiles(result_dir)
-#   transSortRDD.pprint()
-  #for item in sortRDD.take(10):
-    #print(item)
+  transSortDStream.pprint()
+ 
     
     
   pass

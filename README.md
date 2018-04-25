@@ -46,3 +46,7 @@ Remove accumulator. Try count on DStream again
 24-April-18
 
 Hint 2 finished. Using new joins. Might need to be tidied. Needs lots of commenting.
+
+25-April-18
+
+Comment Code for Hint 2 - Starting Hint 3
